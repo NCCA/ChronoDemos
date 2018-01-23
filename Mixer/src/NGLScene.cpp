@@ -20,7 +20,7 @@ NGLScene::NGLScene()
 void NGLScene::buildWorld()
 {
   chrono::collision::ChCollisionModel::SetDefaultSuggestedEnvelope(0.3);
-  size_t numSpheres=400;
+  size_t numSpheres=800;
   setColourArray(numSpheres+10);
   for (size_t bi = 0; bi < numSpheres; bi++)
   {
@@ -91,11 +91,11 @@ void NGLScene::buildWorld()
     ground->SetName("ground");
     m_physicalSystem.AddBody(ground);
 
-    std::array<chrono::ChVector<>,4> mixers={chrono::ChVector<>(-5, -1.6, -5),
+    std::array<chrono::ChVector<>,4> mixers={{chrono::ChVector<>(-5, -1.6, -5),
                                              chrono::ChVector<>( 5, -1.6, -5),
                                              chrono::ChVector<>(-5, -1.6,  5),
                                              chrono::ChVector<>( 5, -1.6,  5)
-                                          };
+                                          }};
 
     for (auto pos : mixers)
     {
@@ -117,8 +117,6 @@ void NGLScene::buildWorld()
         mfun->Set_yconst(chrono::CH_C_PI / 2.0);  // speed w=90/s
     m_physicalSystem.AddLink(my_motor);
     }
-
-
 }
 
 
@@ -176,13 +174,13 @@ void NGLScene::initializeGL()
   // now to load the shader and set the values
   // grab an instance of shader manager
   ngl::ShaderLib *shader=ngl::ShaderLib::instance();
-
-  (*shader)["nglDiffuseShader"]->use();
-  shader->setUniform("Colour",1.0f,1.0f,0.0f,1.0f);
+  shader->loadShader("DiffuseShader","shaders/DiffuseCheckVertex.glsl","shaders/DiffuseCheckFragment.glsl");
+  (*shader)["DiffuseShader"]->use();
+  shader->setUniform("colour",1.0f,1.0f,0.0f,1.0f);
   shader->setUniform("lightPos",1.0f,1.0f,1.0f);
   shader->setUniform("lightDiffuse",1.0f,1.0f,1.0f,1.0f);
   ngl::VAOPrimitives *prim = ngl::VAOPrimitives::instance();
-  prim->createSphere("sphere",1.0f,60.0f);
+  prim->createSphere("sphere",1.0f,30.0f);
   prim->createLineGrid("plane",140.0f,140.0f,40.0f);
   m_view = ngl::lookAt({0,20,20},{0,0,0},{0,1,0});
   m_projection=ngl::perspective( 45.0f, static_cast<float>( width() ) / height(), 0.05f, 350.0f );
@@ -239,7 +237,7 @@ void NGLScene::paintGL()
   m_globalTransformMatrix.m_m[3][2] = m_modelPos.m_z;
 
   ngl::ShaderLib *shader=ngl::ShaderLib::instance();
-  shader->setUniform("Colour",1.0f,1.0f,0.0f,1.0f);
+  shader->setUniform("colour",1.0f,1.0f,0.0f,1.0f);
 
   for (size_t i = 0; i < m_physicalSystem.Get_bodylist()->size(); i++)
   {
@@ -259,8 +257,8 @@ void NGLScene::paintGL()
            double radius = sphere_shape->GetSphereGeometry().rad;
            m_tx.setScale(radius,radius,radius);
            //shader->setUniform("Colour",1.0f,1.0f,0.0f,1.0f);
-           shader->setUniform("Colour",m_colours[i]);
-
+           shader->setUniform("colour",m_colours[i]);
+           shader->setUniform("checkOn",true);
            loadMatricesToShader();
            prim->draw("sphere");
         }
@@ -268,13 +266,14 @@ void NGLScene::paintGL()
        {
           chrono::Vector scale = box_shape->GetBoxGeometry().Size;
           m_tx.setScale(scale.x()*2,scale.y()*2,scale.z()*2);
+          shader->setUniform("checkOn",false);
           loadMatricesToShader();
           if(strcmp(abody->GetName(),"mixer")==0)
-            shader->setUniform("Colour",1.0f,0.0f,0.0f,1.0f);
+            shader->setUniform("colour",1.0f,0.0f,0.0f,1.0f);
           else if(strcmp(abody->GetName(),"ground")==0)
-            shader->setUniform("Colour",0.5f,0.5f,0.5f,1.0f);
+            shader->setUniform("colour",0.5f,0.5f,0.5f,1.0f);
           else
-            shader->setUniform("Colour",0.0f,1.0f,0.0f,1.0f);
+            shader->setUniform("colour",0.0f,1.0f,0.0f,1.0f);
           prim->draw("cube");
         }
       }
@@ -308,7 +307,7 @@ void NGLScene::keyPressEvent(QKeyEvent *_event)
                                                          1000,   // density
                                                          true,   // collide enable?
                                                          true);  // visualization?
-    mrigidBody->SetPos(chrono::ChVector<>(-5 + chrono::ChRandom() * 10, 4 , -5 + chrono::ChRandom() * 10));
+    mrigidBody->SetPos(chrono::ChVector<>(-5 + chrono::ChRandom() * 10, 10+chrono::ChRandom() , -5 + chrono::ChRandom() * 10));
     mrigidBody->GetMaterialSurfaceNSC()->SetFriction(0.3f);
 
     m_physicalSystem.Add(mrigidBody);

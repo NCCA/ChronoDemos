@@ -96,7 +96,7 @@ private:
     void loadMatricesToShader();
     void setColourArray(size_t _numColours);
     std::vector<ngl::Vec4> m_colours;
-    bool m_pause=true;
+    bool m_pause=false;
 
 };
 
