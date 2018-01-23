@@ -5,6 +5,7 @@
 #include <ngl/NGLInit.h>
 #include <ngl/VAOPrimitives.h>
 #include <ngl/ShaderLib.h>
+#include <ngl/Random.h>
 #include <iostream>
 #include <chrono/physics/ChBodyEasy.h>
 
@@ -19,10 +20,12 @@ NGLScene::NGLScene()
 void NGLScene::buildWorld()
 {
   chrono::collision::ChCollisionModel::SetDefaultSuggestedEnvelope(0.3);
-  for (int bi = 0; bi < 400; bi++)
+  size_t numSpheres=400;
+  setColourArray(numSpheres+10);
+  for (size_t bi = 0; bi < numSpheres; bi++)
   {
     // Create a bunch of ChronoENGINE rigid bodies which will fall..
-    auto mrigidBody = std::make_shared<chrono::ChBodyEasySphere>(0.81,   // radius
+    auto mrigidBody = std::make_shared<chrono::ChBodyEasySphere>(chrono::ChRandom(),   // radius
                                                          1000,   // density
                                                          true,   // collide enable?
                                                          true);  // visualization?
@@ -79,23 +82,42 @@ void NGLScene::buildWorld()
 
     m_physicalSystem.Add(wallBody4);
 
+
+    auto ground = std::make_shared<chrono::ChBodyEasyBox>(160, 0.5, 160, 1.0, true, true);
+    ground->SetPos(chrono::ChVector<>(0, -5, 0));
+    ground->SetBodyFixed(true);
+    ground->GetMaterialSurfaceNSC()->SetSfriction(10.0);
+    ground->GetMaterialSurfaceNSC()->SetKfriction(10.0);
+    ground->SetName("ground");
+    m_physicalSystem.AddBody(ground);
+
+    std::array<chrono::ChVector<>,4> mixers={chrono::ChVector<>(-5, -1.6, -5),
+                                             chrono::ChVector<>( 5, -1.6, -5),
+                                             chrono::ChVector<>(-5, -1.6,  5),
+                                             chrono::ChVector<>( 5, -1.6,  5)
+                                          };
+
+    for (auto pos : mixers)
+    {
     // Add the rotating mixer
-    auto rotatingBody = std::make_shared<chrono::ChBodyEasyBox>(10, 5, 1,  // x,y,z size
+    auto rotatingBody = std::make_shared<chrono::ChBodyEasyBox>(8, 8, 1,  // x,y,z size
                                                         4000,      // density
                                                         true,      // collide enable?
                                                         true);     // visualization?
-    rotatingBody->SetPos(chrono::ChVector<>(0, -1.6, 0));
+    rotatingBody->SetPos(pos);
     rotatingBody->GetMaterialSurfaceNSC()->SetFriction(0.4f);
     rotatingBody->SetName("mixer");
     m_physicalSystem.Add(rotatingBody);
 
     // .. an engine between mixer and truss
     auto my_motor = std::make_shared<chrono::ChLinkEngine>();
-    my_motor->Initialize(rotatingBody, floorBody, chrono::ChCoordsys<>(chrono::ChVector<>(0, 0, 0), Q_from_AngAxis(chrono::CH_C_PI_2, chrono::VECT_X)));
+    my_motor->Initialize(rotatingBody, floorBody, chrono::ChCoordsys<>(pos, Q_from_AngAxis(chrono::CH_C_PI_2, chrono::VECT_X)));
     my_motor->Set_eng_mode(chrono::ChLinkEngine::ENG_MODE_SPEED);
     if (auto mfun = std::dynamic_pointer_cast<chrono::ChFunction_Const>(my_motor->Get_spe_funct()))
         mfun->Set_yconst(chrono::CH_C_PI / 2.0);  // speed w=90/s
     m_physicalSystem.AddLink(my_motor);
+    }
+
 
 }
 
@@ -108,6 +130,18 @@ NGLScene::~NGLScene()
 }
 
 
+void NGLScene::setColourArray(size_t _numColours)
+{
+  ngl::Random *rng=ngl::Random::instance();
+  rng->setSeed();
+  for(size_t i=0; i<_numColours; ++i)
+  {
+      m_colours.push_back(ngl::Vec4(rng->randomPositiveNumber(1.0f),
+                          rng->randomPositiveNumber(1.0f),
+                          rng->randomPositiveNumber(1.0f),
+                          1.0f));
+  }
+}
 
 void NGLScene::resizeGL(int _w , int _h)
 {
@@ -133,7 +167,7 @@ void NGLScene::initializeGL()
   std::cout<<"building world\n";
   buildWorld();
   m_physicalSystem.SetSolverType(chrono::ChSolver::Type::SOR);
-  m_physicalSystem.SetMaxItersSolverSpeed(20);
+  m_physicalSystem.SetMaxItersSolverSpeed(30);
   m_contactCallback.msystem = &m_physicalSystem;  // will be used by callback
   m_physicalSystem.GetContactContainer()->RegisterAddContactCallback(&m_contactCallback);
   std::cout<<"starting timers\n";
@@ -150,7 +184,7 @@ void NGLScene::initializeGL()
   ngl::VAOPrimitives *prim = ngl::VAOPrimitives::instance();
   prim->createSphere("sphere",1.0f,60.0f);
   prim->createLineGrid("plane",140.0f,140.0f,40.0f);
-  m_view = ngl::lookAt({20,20,20},{0,0,0},{0,1,0});
+  m_view = ngl::lookAt({0,20,20},{0,0,0},{0,1,0});
   m_projection=ngl::perspective( 45.0f, static_cast<float>( width() ) / height(), 0.05f, 350.0f );
 
 
@@ -210,39 +244,41 @@ void NGLScene::paintGL()
   for (size_t i = 0; i < m_physicalSystem.Get_bodylist()->size(); i++)
   {
      auto abody = m_physicalSystem.Get_bodylist()->at(i);
-     for (int i = 0; i < abody->GetAssets().size(); i++)
+     for (size_t a = 0; a < abody->GetAssets().size(); a++)
      {
-             auto asset = abody->GetAssets().at(i);
-             const chrono::Vector pos = abody->GetFrame_REF_to_abs().GetPos();
-           //rotation of the body
-             chrono::Quaternion rot = abody->GetFrame_REF_to_abs().GetRot();
-             m_tx.setPosition(pos.x(),pos.y(),pos.z());
-             chrono::Vector r=rot.Q_to_Euler123();
-             m_tx.setRotation(ngl::degrees(r.x()),ngl::degrees(r.y()),ngl::degrees(r.z()));
+       auto asset = abody->GetAssets().at(a);
+       const chrono::Vector pos = abody->GetFrame_REF_to_abs().GetPos();
+     //rotation of the body
+       chrono::Quaternion rot = abody->GetFrame_REF_to_abs().GetRot();
+       m_tx.setPosition(pos.x(),pos.y(),pos.z());
+       chrono::Vector r=rot.Q_to_Euler123();
+       m_tx.setRotation(ngl::degrees(r.x()),ngl::degrees(r.y()),ngl::degrees(r.z()));
 
-           if (chrono::ChSphereShape* sphere_shape = dynamic_cast<chrono::ChSphereShape*>(asset.get()))
-           {
-               double radius = sphere_shape->GetSphereGeometry().rad;
-               m_tx.setScale(radius,radius,radius);
-               shader->setUniform("Colour",1.0f,1.0f,0.0f,1.0f);
-               loadMatricesToShader();
-               prim->draw("sphere");
-            }
-           else if (chrono::ChBoxShape* box_shape = dynamic_cast<chrono::ChBoxShape*>(asset.get()))
-           {
-              chrono::Vector scale = box_shape->GetBoxGeometry().Size;
-              m_tx.setScale(scale.x()*2,scale.y()*2,scale.z()*2);
-              loadMatricesToShader();
-              if(strcmp(abody->GetName(),"mixer")==0)
-                shader->setUniform("Colour",1.0f,0.0f,0.0f,1.0f);
-              else
-                shader->setUniform("Colour",0.0f,1.0f,0.0f,1.0f);
-              prim->draw("cube");
-            }
+       if (chrono::ChSphereShape* sphere_shape = dynamic_cast<chrono::ChSphereShape*>(asset.get()))
+       {
+           double radius = sphere_shape->GetSphereGeometry().rad;
+           m_tx.setScale(radius,radius,radius);
+           //shader->setUniform("Colour",1.0f,1.0f,0.0f,1.0f);
+           shader->setUniform("Colour",m_colours[i]);
+
+           loadMatricesToShader();
+           prim->draw("sphere");
+        }
+       else if (chrono::ChBoxShape* box_shape = dynamic_cast<chrono::ChBoxShape*>(asset.get()))
+       {
+          chrono::Vector scale = box_shape->GetBoxGeometry().Size;
+          m_tx.setScale(scale.x()*2,scale.y()*2,scale.z()*2);
+          loadMatricesToShader();
+          if(strcmp(abody->GetName(),"mixer")==0)
+            shader->setUniform("Colour",1.0f,0.0f,0.0f,1.0f);
+          else if(strcmp(abody->GetName(),"ground")==0)
+            shader->setUniform("Colour",0.5f,0.5f,0.5f,1.0f);
+          else
+            shader->setUniform("Colour",0.0f,1.0f,0.0f,1.0f);
+          prim->draw("cube");
+        }
       }
-  }
-
-
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -263,6 +299,27 @@ void NGLScene::keyPressEvent(QKeyEvent *_event)
   break;
   case Qt::Key_P : m_pause ^=true; break;
   default : break;
+  case Qt::Key_W : glPolygonMode(GL_FRONT_AND_BACK,GL_LINE); break;
+  case Qt::Key_S : glPolygonMode(GL_FRONT_AND_BACK,GL_FILL); break;
+  case Qt::Key_A :
+
+    // Create a bunch of ChronoENGINE rigid bodies which will fall..
+    auto mrigidBody = std::make_shared<chrono::ChBodyEasySphere>(chrono::ChRandom(),   // radius
+                                                         1000,   // density
+                                                         true,   // collide enable?
+                                                         true);  // visualization?
+    mrigidBody->SetPos(chrono::ChVector<>(-5 + chrono::ChRandom() * 10, 4 , -5 + chrono::ChRandom() * 10));
+    mrigidBody->GetMaterialSurfaceNSC()->SetFriction(0.3f);
+
+    m_physicalSystem.Add(mrigidBody);
+    ngl::Random *rng=ngl::Random::instance();
+    m_colours.push_back(ngl::Vec4(rng->randomPositiveNumber(1.0f),
+                        rng->randomPositiveNumber(1.0f),
+                        rng->randomPositiveNumber(1.0f),
+                        1.0f));
+
+
+  break;
   }
   // finally update the GLWindow and re-draw
 

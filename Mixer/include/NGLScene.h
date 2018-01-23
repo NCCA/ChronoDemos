@@ -94,7 +94,9 @@ private:
     ngl::Transformation m_tx;
     ngl::Mat4 m_globalTransformMatrix;
     void loadMatricesToShader();
-    bool m_pause=false;
+    void setColourArray(size_t _numColours);
+    std::vector<ngl::Vec4> m_colours;
+    bool m_pause=true;
 
 };
 
