@@ -30,7 +30,7 @@ INCLUDEPATH +=/usr/local/include
 INCLUDEPATH +=/usr/local/include/chrono/collision/bullet
 linux:INCLUDEPATH += /public/devel/include
 linux:INCLUDEPATH += /public/devel/include/chrono/collision/bullet
-linux:LIBS+= -L/public/devel/lib64 -lChronoEngine -lChronoEngine_fea -lpthread
+linux:LIBS+= -L/public/devel/lib64 -lChronoEngine -lpthread
 DEFINES += BP_USE_FIXEDPOINT_INT_32
 LIBS += -L/usr/local/lib64 -lChronoEngine
 # where our exe is going to live (root of project)
